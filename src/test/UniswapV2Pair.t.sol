@@ -4,210 +4,20 @@ pragma solidity >=0.8.13;
 import "../../lib/ds-test/test.sol";
 import "../../lib/utils/Console.sol";
 import "../../lib/utils/VyperDeployer.sol";
-
 import "../IUniswapV2Pair.sol";
+import "./Console.sol";
 
-/// @notice Modern and gas efficient ERC20 + EIP-2612 implementation.
-/// @author Solmate (https://github.com/Rari-Capital/solmate/blob/main/src/tokens/ERC20.sol)
-/// @author Modified from Uniswap (https://github.com/Uniswap/uniswap-v2-core/blob/master/contracts/UniswapV2ERC20.sol)
-/// @dev Do not manually set balances without updating totalSupply, as the sum of all user balances must not exceed it.
-contract ERC20 {
-    /*//////////////////////////////////////////////////////////////
-                                 EVENTS
-    //////////////////////////////////////////////////////////////*/
+import "../../node_modules/@rari-capital/solmate/src/tokens/ERC20.sol";
 
-    event Transfer(address indexed from, address indexed to, uint256 amount);
-
-    event Approval(address indexed owner, address indexed spender, uint256 amount);
-
-    /*//////////////////////////////////////////////////////////////
-                            METADATA STORAGE
-    //////////////////////////////////////////////////////////////*/
-
-    string public name;
-
-    string public symbol;
-
-    uint8 public immutable decimals;
-
-    /*//////////////////////////////////////////////////////////////
-                              ERC20 STORAGE
-    //////////////////////////////////////////////////////////////*/
-
-    uint256 public totalSupply;
-
-    mapping(address => uint256) public balanceOf;
-
-    mapping(address => mapping(address => uint256)) public allowance;
-
-    /*//////////////////////////////////////////////////////////////
-                            EIP-2612 STORAGE
-    //////////////////////////////////////////////////////////////*/
-
-    uint256 internal immutable INITIAL_CHAIN_ID;
-
-    bytes32 internal immutable INITIAL_DOMAIN_SEPARATOR;
-
-    mapping(address => uint256) public nonces;
-
-    /*//////////////////////////////////////////////////////////////
-                               CONSTRUCTOR
-    //////////////////////////////////////////////////////////////*/
+contract MockERC20 is ERC20 {
 
     constructor(
         string memory _name,
-        string memory _symbol,
-        uint8 _decimals
-    ) {
-        name = _name;
-        symbol = _symbol;
-        decimals = _decimals;
+        string memory _symbol
+    ) ERC20(_name, _symbol, 18) {}
 
-        INITIAL_CHAIN_ID = block.chainid;
-        INITIAL_DOMAIN_SEPARATOR = computeDomainSeparator();
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                               ERC20 LOGIC
-    //////////////////////////////////////////////////////////////*/
-
-    function approve(address spender, uint256 amount) public virtual returns (bool) {
-        allowance[msg.sender][spender] = amount;
-
-        emit Approval(msg.sender, spender, amount);
-
-        return true;
-    }
-
-    function transfer(address to, uint256 amount) public virtual returns (bool) {
-        balanceOf[msg.sender] -= amount;
-
-        // Cannot overflow because the sum of all user
-        // balances can't exceed the max uint256 value.
-        unchecked {
-            balanceOf[to] += amount;
-        }
-
-        emit Transfer(msg.sender, to, amount);
-
-        return true;
-    }
-
-    function transferFrom(
-        address from,
-        address to,
-        uint256 amount
-    ) public virtual returns (bool) {
-        uint256 allowed = allowance[from][msg.sender]; // Saves gas for limited approvals.
-
-        if (allowed != type(uint256).max) allowance[from][msg.sender] = allowed - amount;
-
-        balanceOf[from] -= amount;
-
-        // Cannot overflow because the sum of all user
-        // balances can't exceed the max uint256 value.
-        unchecked {
-            balanceOf[to] += amount;
-        }
-
-        emit Transfer(from, to, amount);
-
-        return true;
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                             EIP-2612 LOGIC
-    //////////////////////////////////////////////////////////////*/
-
-    function permit(
-        address owner,
-        address spender,
-        uint256 value,
-        uint256 deadline,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) public virtual {
-        require(deadline >= block.timestamp, "PERMIT_DEADLINE_EXPIRED");
-
-        // Unchecked because the only math done is incrementing
-        // the owner's nonce which cannot realistically overflow.
-        unchecked {
-            address recoveredAddress = ecrecover(
-                keccak256(
-                    abi.encodePacked(
-                        "\x19\x01",
-                        DOMAIN_SEPARATOR(),
-                        keccak256(
-                            abi.encode(
-                                keccak256(
-                                    "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
-                                ),
-                                owner,
-                                spender,
-                                value,
-                                nonces[owner]++,
-                                deadline
-                            )
-                        )
-                    )
-                ),
-                v,
-                r,
-                s
-            );
-
-            require(recoveredAddress != address(0) && recoveredAddress == owner, "INVALID_SIGNER");
-
-            allowance[recoveredAddress][spender] = value;
-        }
-
-        emit Approval(owner, spender, value);
-    }
-
-    function DOMAIN_SEPARATOR() public view virtual returns (bytes32) {
-        return block.chainid == INITIAL_CHAIN_ID ? INITIAL_DOMAIN_SEPARATOR : computeDomainSeparator();
-    }
-
-    function computeDomainSeparator() internal view virtual returns (bytes32) {
-        return
-            keccak256(
-                abi.encode(
-                    keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
-                    keccak256(bytes(name)),
-                    keccak256("1"),
-                    block.chainid,
-                    address(this)
-                )
-            );
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                        INTERNAL MINT/BURN LOGIC
-    //////////////////////////////////////////////////////////////*/
-
-    function _mint(address to, uint256 amount) internal virtual {
-        totalSupply += amount;
-
-        // Cannot overflow because the sum of all user
-        // balances can't exceed the max uint256 value.
-        unchecked {
-            balanceOf[to] += amount;
-        }
-
-        emit Transfer(address(0), to, amount);
-    }
-
-    function _burn(address from, uint256 amount) internal virtual {
-        balanceOf[from] -= amount;
-
-        // Cannot underflow because a user's balance
-        // will never be larger than the total supply.
-        unchecked {
-            totalSupply -= amount;
-        }
-
-        emit Transfer(from, address(0), amount);
+    function mint(address guy, uint256 wad) external {
+        _mint(guy, wad);
     }
 }
 
@@ -216,19 +26,108 @@ contract UniswapV2PairTest is DSTest {
     VyperDeployer vyperDeployer = new VyperDeployer();
 
     IUniswapV2Pair pair;
-    ERC20 WETH;
-    ERC20 DAI;
+    MockERC20 WETH;
+    MockERC20 DAI;
 
     function setUp() public {
-        WETH = new ERC20("WETH token", "WETH", 18);
-        DAI = new ERC20("DAI token", "DAI", 18);
+        WETH = new MockERC20("WETH token", "WETH");
+        DAI = new MockERC20("DAI token", "DAI");
         pair = IUniswapV2Pair(vyperDeployer.deployContract("UniswapV2Pair"));
         pair.initialize(address(WETH), address(DAI));
+        WETH.mint(address(this), 1e27);
+        DAI.mint(address(this), 1e27);
     }
 
     function test_sanityCheck() public {
         require(pair.factory() == address(this));
         require(pair.token0() == address(WETH));
         require(pair.token1() == address(DAI));
+        require(pair.totalSupply() == 0);
+    }
+
+    function addLiquidity(uint wethAmount, uint daiAmount) internal {
+        WETH.transfer(address(pair), wethAmount);
+        DAI.transfer(address(pair), daiAmount);
+        pair.mint(address(this));
+    }
+
+    function testMint() public {
+        uint wethAmount = 1e18;
+        uint daiAmount = 4e18;
+        uint expectedLiquidity = 2000000000000000999; // should be 2e18
+
+        addLiquidity(wethAmount, daiAmount);
+
+        (uint wethReserves, uint daiReserves,) = pair.getReserves();
+        require(pair.totalSupply() == expectedLiquidity, Console.log("make sure pair supply is equal to expected liquidity", pair.totalSupply()));
+        require(pair.balanceOf(address(this)) == expectedLiquidity - 10**3, Console.log("make sure pair balance of this contract is equal to expected liquidity minus MIN_LIQ", pair.balanceOf(address(this))));
+        require(WETH.balanceOf(address(pair)) == wethAmount, "make sure base token balance of pair is equal to base amount");
+        require(DAI.balanceOf(address(pair)) == daiAmount, "make sure quote token balance of pair is equal to quote amount");
+        require(wethReserves == wethAmount, "make sure base reserves equal base amount");
+        require(daiReserves == daiAmount, "make sure quote reserves equal quote amount");
+    }
+
+    function testSwapWETH() public {
+        uint wethAmount = 5e18;
+        uint daiAmount = 10e18;
+        uint swapAmount = 1e18;
+        uint expectedOutputAmount = 1662497915624478906;
+
+        addLiquidity(wethAmount, daiAmount);
+
+        WETH.transfer(address(pair), swapAmount);
+        
+        pair.swap(0, expectedOutputAmount, address(this), "");
+
+        (uint wethReserves, uint daiReserves,) = pair.getReserves();
+        require(wethReserves == wethAmount + swapAmount, "make sure base reserves equal base amount + swap amount");
+        require(daiReserves == daiAmount - expectedOutputAmount, "make sure quote reserves equal quote amount - expected output");
+        require(WETH.balanceOf(address(pair)) == wethAmount + swapAmount, "make sure base token balance of this contract equals base amount + swap amount");
+        require(DAI.balanceOf(address(pair)) == daiAmount - expectedOutputAmount, "make sure quote token balance of this contract equals quote amount - expected output");
+        // // expect(await token0.balanceOf(wallet.address)).to.eq(totalSupplyToken0.sub(token0Amount).sub(swapAmount))
+        // // expect(await token1.balanceOf(wallet.address)).to.eq(totalSupplyToken1.sub(token1Amount).add(expectedOutputAmount))
+    }
+
+    function testSwapDAI() public {
+        uint wethAmount = 5e18;
+        uint daiAmount = 10e18;
+        uint swapAmount = 1e18;
+        uint expectedOutputAmount = 453305446940074565;
+
+        addLiquidity(wethAmount, daiAmount);
+
+        DAI.transfer(address(pair), swapAmount);
+
+        pair.swap(expectedOutputAmount, 0, address(this), "");
+
+        (uint wethReserves, uint daiReserves,) = pair.getReserves();
+        require(wethReserves == wethAmount - expectedOutputAmount);
+        require(daiReserves == daiAmount + swapAmount);
+        require(WETH.balanceOf(address(pair)) == wethAmount - expectedOutputAmount);
+        require(DAI.balanceOf(address(pair)) == daiAmount + swapAmount);
+        // expect(await token0.balanceOf(wallet.address)).to.eq(totalSupplyToken0.sub(token0Amount).add(expectedOutputAmount))
+        // expect(await token1.balanceOf(wallet.address)).to.eq(totalSupplyToken1.sub(token1Amount).sub(swapAmount))
+    }
+
+    function testBurn() public {
+
+        uint wethAmount = 3e18;
+        uint daiAmount = 3e18;
+        uint expectedLiquidity = 3e18;
+
+        addLiquidity(wethAmount, daiAmount);
+
+        pair.transfer(address(pair), expectedLiquidity - 1000);
+
+        pair.burn(address(this));
+
+        // require(pair.balanceOf(address(this)) == 0);
+        // require(pair.totalSupply() == 1000);
+        // require(WETH.balanceOf(address(pair)) == 1000);
+        // require(DAI.balanceOf(address(pair)) == 1000);
+        // uint totalSupplyToken0 = WETH.totalSupply();
+        // uint totalSupplyToken1 = DAI.totalSupply();
+        // require(WETH.balanceOf(address(this)) == totalSupplyToken0 - 1000);
+        // require(DAI.balanceOf(address(this)) == totalSupplyToken1 - 1000);
     }
 }

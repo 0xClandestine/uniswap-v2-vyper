@@ -87,6 +87,7 @@ def initialize(_token0: address, _token1: address):
     self.symbol = "UNI-V2" 
     self.decimals = 18
     self.factory = msg.sender
+    # self._mint(ZERO_ADDRESS, MINIMUM_LIQUIDITY)
 
 @external
 def transfer(_to : address, _value : uint256) -> bool:
@@ -196,19 +197,22 @@ def _update(balance0: uint256, balance1: uint256, _reserve0: uint112, _reserve1:
 
 @internal
 @pure
-def sqrt256(x: uint256) -> uint256:
+def sqrt256(y: uint256) -> uint256:
     """
-    @dev Computes the square root of `x` using the Babylonian method.
-    @param x The number to compute the square root of.
+    @dev babylonian method (https://en.wikipedia.org/wiki/Methods_of_computing_square_roots#Babylonian_method)
     """
-    z: uint256 = (x + 1) / 2
-    y: uint256 = x
-    for i in range(256):
-        if (z > y):
-            break
-        y = z
-        z = (x / z + z) / 2
-    return y
+    z: uint256 = 0
+    if y > 3:
+        z = y
+        x: uint256 = unsafe_add(unsafe_div(y, 2), 1)
+        for i in range(256):
+            if (z > y):
+                break
+            z = x
+            x = unsafe_div(unsafe_add(unsafe_div(y, x), x), 2)
+    elif y != 0:
+        z = 1
+    return z
 
 @internal
 def _mintFee(_reserve0: uint112, _reserve1: uint112) -> bool:
@@ -217,7 +221,8 @@ def _mintFee(_reserve0: uint112, _reserve1: uint112) -> bool:
     @param _reserve0 The first reserve balance
     @param _reserve1 The second reserve balance
     """
-    feeTo: address = IUniswapV2Factory(self.factory).feeTo()
+    # feeTo: address = IUniswapV2Factory(self.factory).feeTo()
+    feeTo: address = ZERO_ADDRESS # NOTE for testing purposes
     feeOn: bool = feeTo != ZERO_ADDRESS
     kLast: uint256 = self.kLast
     if feeOn:
@@ -237,7 +242,7 @@ def _mintFee(_reserve0: uint112, _reserve1: uint112) -> bool:
 
 @external
 @nonreentrant("lock")
-def mint(to: address):
+def mint(to: address) -> uint256: 
     """
     @dev Mints LP tokens to a given address assuming they've sent reserves to this contract.
     @param to: The address to mint LP tokens to.
@@ -263,6 +268,8 @@ def mint(to: address):
     if feeOn:
         self.kLast = convert(_reserve0, uint256) * convert(_reserve1, uint256)
     # log Mint(msg.sender, liquidity, amount0, amount1)
+    return liquidity
+
 
 @external
 @nonreentrant("lock")

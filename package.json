@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.6.0",
+    "@rari-capital/solmate": "^6.4.0",
+    "@uniswap/v2-core": "^1.0.1"
+  }
+}
