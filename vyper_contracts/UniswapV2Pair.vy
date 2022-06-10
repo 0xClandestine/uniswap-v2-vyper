@@ -57,8 +57,8 @@ reserve0: uint112
 reserve1: uint112
 blockTimestampLast: uint32
 
-price0CummulativeLast: public(uint256)
-price1CummulativeLast: public(uint256)
+price0CumulativeLast: public(uint256)
+price1CumulativeLast: public(uint256)
 kLast: public(uint256)
 
 # not supported by foundry-vyper
@@ -87,7 +87,6 @@ def initialize(_token0: address, _token1: address):
     self.symbol = "UNI-V2" 
     self.decimals = 18
     self.factory = msg.sender
-
 
 @external
 def transfer(_to : address, _value : uint256) -> bool:
@@ -171,22 +170,25 @@ def _safeTransfer(_token: address, _to: address, _value: uint256) -> bool:
         assert convert(_response, bool), "Transfer failed!"
     return True
 
-# @internal
-# def encode(y: uint112) -> uint224:
-#     return convert(y, uint224) * 5192296858534827628530496329220096
+@internal
+def encode(y: uint112) -> uint224:
+    Q112: uint256 = 5192296858534827628530496329220096
+    return convert(unsafe_mul(convert(y, uint256), Q112), uint224)
 
-# @internal
-# def uqdiv(x: uint112, y: uint112) -> uint224:
-#     return convert(x / y, uint224)
+@internal
+def uqdiv(x: uint224, y: uint112) -> uint256:
+    return unsafe_div(convert(x, uint256), convert(y, uint256))
 
 @internal
 def _update(balance0: uint256, balance1: uint256, _reserve0: uint112, _reserve1: uint112):
     blockTimestamp: uint32 = convert(block.timestamp % 2**32, uint32)
     timeElapsed: uint32 = convert(convert(blockTimestamp, uint256) - convert(self.blockTimestampLast, uint256), uint32)
     
-    # if timeElapsed > 0 and _reserve0 != 0 and _reserve1 != 0:
-    #     self.price0CummulativeLast += convert(self.encode(_reserve1), uint256)
-    
+    if timeElapsed > 0 and _reserve0 != 0 and _reserve1 != 0:
+        self.price0CumulativeLast += unsafe_mul(convert(self.uqdiv(self.encode(_reserve1), _reserve0), uint256), convert(timeElapsed, uint256))
+        self.price1CumulativeLast += unsafe_mul(convert(self.uqdiv(self.encode(_reserve0), _reserve1), uint256), convert(timeElapsed, uint256))
+
+
     self.reserve0 = convert(balance0, uint112)
     self.reserve1 = convert(balance1, uint112)
     self.blockTimestampLast = blockTimestamp
@@ -225,7 +227,7 @@ def _mintFee(_reserve0: uint112, _reserve1: uint112) -> bool:
             if (rootK > rootKLast):
                 numerator: uint256 = self.totalSupply * (rootK - rootKLast)
                 denominator: uint256 = rootK * 5 + rootKLast
-                liquidity: uint256 = numerator / denominator
+                liquidity: uint256 = unsafe_div(numerator, denominator)
                 if liquidity > 0:
                     self._mint(feeTo, liquidity)
     elif kLast != 0:
