@@ -133,9 +133,9 @@ def _mint(_to : address, _value : uint256):
     @param _to The address of the recipient.
     @param _value The amount of tokens to be minted.
     """
-    self.balanceOf[msg.sender] += _value
+    self.balanceOf[_to] += _value
     self.totalSupply += _value
-    log Transfer(ZERO_ADDRESS, msg.sender, _value)
+    log Transfer(ZERO_ADDRESS, _to, _value)
 
 @internal
 def _burn(_from: address, _value: uint256):
