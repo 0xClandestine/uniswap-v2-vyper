@@ -47,7 +47,7 @@ balanceOf: public(HashMap[address, uint256])
 allowance: public(HashMap[address, HashMap[address, uint256]])
 totalSupply: public(uint256)
 
-MINIMUM_LIQUIDITY: constant(uint256) = 10**3
+MINIMUM_LIQUIDITY: constant(uint256) = 1000
 
 factory: public(address)
 token0: public(address)
@@ -87,7 +87,6 @@ def initialize(_token0: address, _token1: address):
     self.symbol = "UNI-V2" 
     self.decimals = 18
     self.factory = msg.sender
-    # self._mint(ZERO_ADDRESS, MINIMUM_LIQUIDITY)
 
 @external
 def transfer(_to : address, _value : uint256) -> bool:
@@ -173,7 +172,7 @@ def _safeTransfer(_token: address, _to: address, _value: uint256) -> bool:
 
 @internal
 def encode(y: uint112) -> uint224:
-    Q112: uint256 = 5192296858534827628530496329220096
+    Q112: uint256 = 5192296858534827628530496329220096 # type(uint112).max not supported in vyper :(
     return convert(unsafe_mul(convert(y, uint256), Q112), uint224)
 
 @internal
@@ -189,7 +188,6 @@ def _update(balance0: uint256, balance1: uint256, _reserve0: uint112, _reserve1:
         self.price0CumulativeLast += unsafe_mul(convert(self.uqdiv(self.encode(_reserve1), _reserve0), uint256), convert(timeElapsed, uint256))
         self.price1CumulativeLast += unsafe_mul(convert(self.uqdiv(self.encode(_reserve0), _reserve1), uint256), convert(timeElapsed, uint256))
 
-
     self.reserve0 = convert(balance0, uint112)
     self.reserve1 = convert(balance1, uint112)
     self.blockTimestampLast = blockTimestamp
@@ -204,20 +202,20 @@ def sqrt256(y: uint256) -> uint256:
     z: uint256 = 0
     if y > 3:
         z = y
-        x: uint256 = unsafe_add(unsafe_div(y, 2), 1)
+        x: uint256 = unsafe_add(shift(y, -1), 1)
         for i in range(256):
             if (z > y):
                 break
             z = x
-            x = unsafe_div(unsafe_add(unsafe_div(y, x), x), 2)
-    elif y != 0:
+            x = shift(unsafe_add(unsafe_div(y, x), x), -1)
+    elif y != 0:  
         z = 1
     return z
 
 @internal
 def _mintFee(_reserve0: uint112, _reserve1: uint112) -> bool:
     """
-    @dev Mints 0.05% of LP growth to 'feeTo'
+    @dev Mints 1/6 of LP growth to 'feeTo'
     @param _reserve0 The first reserve balance
     @param _reserve1 The second reserve balance
     """
@@ -258,7 +256,7 @@ def mint(to: address) -> uint256:
     _totalSupply: uint256 = self.totalSupply
     liquidity: uint256 = 0
     if _totalSupply == 0:
-        liquidity = self.sqrt256(amount0 * amount1 - MINIMUM_LIQUIDITY)
+        liquidity = self.sqrt256(amount0 * amount1) - MINIMUM_LIQUIDITY
         self._mint(ZERO_ADDRESS, MINIMUM_LIQUIDITY)
     else:
         liquidity = min(amount0 * _totalSupply / convert(_reserve0, uint256), amount1 * _totalSupply / convert(_reserve1, uint256))
@@ -267,7 +265,7 @@ def mint(to: address) -> uint256:
     self._update(balance0, balance1, _reserve0, _reserve1)
     if feeOn:
         self.kLast = convert(_reserve0, uint256) * convert(_reserve1, uint256)
-    # log Mint(msg.sender, liquidity, amount0, amount1)
+    log Mint(msg.sender, amount0, amount1)
     return liquidity
 
 
