@@ -87,6 +87,7 @@ PERMIT_TYPE_HASH: constant(bytes32) = 0x6e71edae12b1b97f4d1f60370fef10105fa2faae
 #                      UNI-V2 PAIR STORAGE
 #############################################################
 
+Q112: constant(uint256) = 5192296858534827628530496329220096 # type(uint112).max not supported in vyper :(
 MINIMUM_LIQUIDITY: constant(uint256) = 1000
 
 factory: public(address)
@@ -237,13 +238,9 @@ def _burn(_from: address, amount: uint256):
     self.totalSupply -= amount
     log Transfer(_from, ZERO_ADDRESS, amount)
 
-@external
-@view
-def getReserves() -> (uint112, uint112, uint32):
-    """
-    @dev Returns the current reserves and the last update time.
-    """
-    return self.reserve0, self.reserve1, self.blockTimestampLast
+#############################################################
+#                    SAFE ERC20 LOGIC
+#############################################################
 
 @internal
 def _safeTransfer(_token: address, _to: address, amount: uint256) -> bool:
@@ -260,28 +257,21 @@ def _safeTransfer(_token: address, _to: address, amount: uint256) -> bool:
         assert convert(_response, bool), "Transfer failed!"
     return True
 
+#############################################################
+#                     UQ112x112 LOGIC
+#############################################################
+
 @internal
 def encode(y: uint112) -> uint224:
-    Q112: uint256 = 5192296858534827628530496329220096 # type(uint112).max not supported in vyper :(
     return convert(unsafe_mul(convert(y, uint256), Q112), uint224)
 
 @internal
 def uqdiv(x: uint224, y: uint112) -> uint256:
     return unsafe_div(convert(x, uint256), convert(y, uint256))
 
-@internal
-def _update(balance0: uint256, balance1: uint256, _reserve0: uint112, _reserve1: uint112):
-    blockTimestamp: uint32 = convert(block.timestamp % 2**32, uint32)
-    timeElapsed: uint32 = convert(convert(blockTimestamp, uint256) - convert(self.blockTimestampLast, uint256), uint32)
-    
-    if timeElapsed > 0 and _reserve0 != 0 and _reserve1 != 0:
-        self.price0CumulativeLast += unsafe_mul(convert(self.uqdiv(self.encode(_reserve1), _reserve0), uint256), convert(timeElapsed, uint256))
-        self.price1CumulativeLast += unsafe_mul(convert(self.uqdiv(self.encode(_reserve0), _reserve1), uint256), convert(timeElapsed, uint256))
-
-    self.reserve0 = convert(balance0, uint112)
-    self.reserve1 = convert(balance1, uint112)
-    self.blockTimestampLast = blockTimestamp
-    log Sync(self.reserve0, self.reserve1)
+#############################################################
+#                       SQRT LOGIC
+#############################################################
 
 @internal
 @pure
@@ -301,6 +291,32 @@ def sqrt256(y: uint256) -> uint256:
     elif y != 0:  
         z = 1
     return z
+
+#############################################################
+#                     UNI-V2 PAIR LOGIC
+#############################################################
+
+@external
+@view
+def getReserves() -> (uint112, uint112, uint32):
+    """
+    @dev Returns the current reserves and the last update time.
+    """
+    return self.reserve0, self.reserve1, self.blockTimestampLast
+
+@internal
+def _update(balance0: uint256, balance1: uint256, _reserve0: uint112, _reserve1: uint112):
+    blockTimestamp: uint32 = convert(block.timestamp % 2**32, uint32)
+    timeElapsed: uint32 = convert(convert(blockTimestamp, uint256) - convert(self.blockTimestampLast, uint256), uint32)
+    
+    if timeElapsed > 0 and _reserve0 != 0 and _reserve1 != 0:
+        self.price0CumulativeLast += unsafe_mul(convert(self.uqdiv(self.encode(_reserve1), _reserve0), uint256), convert(timeElapsed, uint256))
+        self.price1CumulativeLast += unsafe_mul(convert(self.uqdiv(self.encode(_reserve0), _reserve1), uint256), convert(timeElapsed, uint256))
+
+    self.reserve0 = convert(balance0, uint112)
+    self.reserve1 = convert(balance1, uint112)
+    self.blockTimestampLast = blockTimestamp
+    log Sync(self.reserve0, self.reserve1)
 
 @internal
 def _mintFee(_reserve0: uint112, _reserve1: uint112) -> bool:
