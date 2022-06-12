@@ -7,6 +7,10 @@ implements: ERC20Detailed
 interface IUniswapV2Factory:
     def feeTo() -> address: view
 
+#############################################################
+#                       ERC20 EVENTS
+#############################################################
+
 event Transfer:
     sender: indexed(address)
     receiver: indexed(address)
@@ -16,6 +20,10 @@ event Approval:
     owner: indexed(address)
     spender: indexed(address)
     value: uint256
+
+#############################################################
+#                    UNI-V2 PAIR EVENTS
+#############################################################
 
 event Mint:
     sender: indexed(address)
@@ -40,12 +48,39 @@ event Sync:
     reserve0: uint112
     reserve1: uint112
 
+#############################################################
+#                      ERC20 STORAGE
+#############################################################
+
 name: public(String[32])
+
 symbol: public(String[32])
+
 decimals: public(uint8)
+
 balanceOf: public(HashMap[address, uint256])
+
 allowance: public(HashMap[address, HashMap[address, uint256]])
+
 totalSupply: public(uint256)
+
+#############################################################
+#                      EIP-2612 STORAGE
+#############################################################
+
+nonces: public(HashMap[address, uint256])
+
+CHAIN_ID: public(uint256)
+
+DOMAIN_SEPARATOR: public(bytes32)
+
+DOMAIN_TYPE_HASH: constant(bytes32) = 0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f
+
+PERMIT_TYPE_HASH: constant(bytes32) = 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9
+
+#############################################################
+#                      UNI-V2 PAIR STORAGE
+#############################################################
 
 MINIMUM_LIQUIDITY: constant(uint256) = 1000
 
@@ -61,17 +96,6 @@ price0CumulativeLast: public(uint256)
 price1CumulativeLast: public(uint256)
 kLast: public(uint256)
 
-# not supported by foundry-vyper
-# @external
-# def __init__(_token0: address, _token1: address):
-#     """
-#     @dev Initializes the Uniswap V2 Pair at contract creation.
-#     """
-#     self.name = "Uniswap V2"
-#     self.symbol = "UNI-V2" 
-#     self.decimals = 18
-#     self.factory = msg.sender
-
 @external
 def initialize(_token0: address, _token1: address):
     """
@@ -81,71 +105,132 @@ def initialize(_token0: address, _token1: address):
     """
     # Removed for testing purposes
     # assert msg.sender == self.factory, "UniswapV2: FORBIDDEN"
-    self.token0 = _token0
-    self.token1 = _token1
+    
+    self.factory = msg.sender
+    
     self.name = "Uniswap V2"
     self.symbol = "UNI-V2" 
     self.decimals = 18
-    self.factory = msg.sender
+    
+    self.token0 = _token0
+    self.token1 = _token1
+
+    self.CHAIN_ID = chain.id
+
+    self.DOMAIN_SEPARATOR = keccak256(
+        concat(
+            DOMAIN_TYPE_HASH, 
+            keccak256(self.name), 
+            keccak256("1"), 
+            convert(chain.id, bytes32), 
+            convert(self, bytes32)
+        )
+    )
+
+# #############################################################
+# #                        ERC20 LOGIC
+# #############################################################
 
 @external
-def transfer(_to : address, _value : uint256) -> bool:
+def transfer(_to : address, amount : uint256) -> bool:
     """
-    @dev Transfers `_value` tokens from msg.sender to `_to`.
+    @dev Transfers `amount` tokens from msg.sender to `_to`.
     @param _to The address of the recipient.
-    @param _value The amount of tokens to be transferred.
+    @param amount The amount of tokens to be transferred.
     """
-    self.balanceOf[msg.sender] -= _value
-    self.balanceOf[_to] += _value
-    log Transfer(msg.sender, _to, _value)
+    self.balanceOf[msg.sender] -= amount
+    self.balanceOf[_to] += amount
+    log Transfer(msg.sender, _to, amount)
     return True
 
 @external
-def transferFrom(_from : address, _to : address, _value : uint256) -> bool:
+def transferFrom(_from : address, _to : address, amount : uint256) -> bool:
     """
-    @dev Transfers `_value` tokens from `_from` to `_to`.
+    @dev Transfers `amount` tokens from `_from` to `_to`.
     @param _from The address of the sender.
     @param _to The address of the recipient.
-    @param _value The amount of tokens to be transferred.
+    @param amount The amount of tokens to be transferred.
     """
-    self.balanceOf[_from] -= _value
-    self.balanceOf[_to] += _value
-    self.allowance[_from][msg.sender] -= _value
-    log Transfer(_from, _to, _value)
+    self.balanceOf[_from] -= amount
+    self.balanceOf[_to] += amount
+    self.allowance[_from][msg.sender] -= amount
+    log Transfer(_from, _to, amount)
     return True
 
 @external
-def approve(_spender : address, _value : uint256) -> bool:
+def approve(spender : address, amount : uint256) -> bool:
     """
     @dev Increases the amount of tokens that the spender is able to spend on behalf of msg.sender.
-    @param _spender The address of the spender.
-    @param _value The amount of tokens to be approved for spending.
+    @param spender The address of the spender.
+    @param amount The amount of tokens to be approved for spending.
     """
-    self.allowance[msg.sender][_spender] = _value
-    log Approval(msg.sender, _spender, _value)
+    self.allowance[msg.sender][spender] = amount
+    log Approval(msg.sender, spender, amount)
     return True
 
-@internal
-def _mint(_to : address, _value : uint256):
-    """
-    @dev Mints `_value` of tokens to `_to`.
-    @param _to The address of the recipient.
-    @param _value The amount of tokens to be minted.
-    """
-    self.balanceOf[_to] += _value
-    self.totalSupply += _value
-    log Transfer(ZERO_ADDRESS, _to, _value)
+#############################################################
+#                     EIP-2612 LOGIC
+#############################################################
+
+@external
+def permit(
+    owner: address,
+    spender: address,
+    amount: uint256,
+    deadline: uint256,
+    v: uint8,
+    r: bytes32,
+    s: bytes32
+) -> bool:
+
+    assert owner != ZERO_ADDRESS
+    assert block.timestamp <= deadline
+
+    nonce: uint256 = self.nonces[owner]
+    
+    digest: bytes32 = keccak256(
+        concat(
+            b"\x19\x01",
+            self.DOMAIN_SEPARATOR,
+            keccak256(_abi_encode(PERMIT_TYPE_HASH, owner, spender, amount, nonce, deadline))
+        )
+    )
+
+    recoveredAddress: address = ecrecover(digest, convert(v, uint256), convert(r, uint256), convert(s, uint256))
+    assert recoveredAddress != ZERO_ADDRESS and recoveredAddress == owner, "UniswapV2: INVALID_SIGNATURE"
+
+    self.allowance[owner][spender] = amount
+    self.nonces[owner] = nonce + 1
+
+    log Approval(owner, spender, amount)
+    
+    return True
+
+#############################################################
+#                 INTERNAL MINT/BURN LOGIC
+#############################################################
 
 @internal
-def _burn(_from: address, _value: uint256):
+def _mint(_to : address, amount : uint256):
     """
-    @dev Burns `_value` of tokens from `_from`.
+    @dev Mints `amount` of tokens to `_to`.
+    @param _to The address of the recipient.
+    @param amount The amount of tokens to be minted.
+    """
+    self.balanceOf[_to] += amount
+    self.totalSupply += amount
+    log Transfer(ZERO_ADDRESS, _to, amount)
+
+@internal
+def _burn(_from: address, amount: uint256):
+    """
+    @dev Burns `amount` of tokens from `_from`.
     @param _from The address to burn tokens from.
-    @param _value The amount of tokens to be burned.
+    @param amount The amount of tokens to be burned.
     """
-    self.balanceOf[_from] -= _value
-    self.totalSupply -= _value
-    log Transfer(_from, ZERO_ADDRESS, _value)
+    self.balanceOf[_from] -= amount
+    self.totalSupply -= amount
+    log Transfer(_from, ZERO_ADDRESS, amount)
 
 @external
 @view
@@ -156,13 +241,13 @@ def getReserves() -> (uint112, uint112, uint32):
     return self.reserve0, self.reserve1, self.blockTimestampLast
 
 @internal
-def _safeTransfer(_token: address, _to: address, _value: uint256) -> bool:
+def _safeTransfer(_token: address, _to: address, amount: uint256) -> bool:
     _response: Bytes[32] = raw_call(
         _token,
         concat(
             0xa9059cbb, # ERC20 transfer selector
             convert(_to, bytes32),
-            convert(_value, bytes32)
+            convert(amount, bytes32)
         ),
         max_outsize=32
     )
@@ -300,7 +385,7 @@ def burn(to: address) -> (uint256, uint256):
 
 @external
 @nonreentrant("lock")
-def swap(amount0Out: uint256, amount1Out: uint256, to: address, data: Bytes[128]):
+def swap(amount0Out: uint256, amount1Out: uint256, to: address, data: Bytes[256]):
     """
     @dev Swaps tokens from one token to another.
     @param amount0Out The amount of token0 to swap out.
@@ -337,7 +422,6 @@ def swap(amount0Out: uint256, amount1Out: uint256, to: address, data: Bytes[128]
     assert balance0Adjusted * balance1Adjusted >= convert(_reserve0, uint256) * convert(_reserve1, uint256) * 1000000, "UniswapV2: INSUFFICIENT_LIQUIDITY"
     self._update(balance0, balance1, _reserve0, _reserve1)
     log Swap(msg.sender, amount0In, amount1In, amount0Out, amount1Out, to)
-    
 
 @external
 @nonreentrant("lock")
