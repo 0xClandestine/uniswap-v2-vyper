@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity >=0.8.0;
 
-import "../../node_modules/@openzeppelin/contracts/utils/Strings.sol";
+import "../../../node_modules/@openzeppelin/contracts/utils/Strings.sol";
 
 library Console {
     function log(

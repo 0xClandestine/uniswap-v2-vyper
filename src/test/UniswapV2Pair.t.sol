@@ -4,9 +4,9 @@ pragma solidity >=0.8.13;
 import "../../lib/ds-test/test.sol";
 import "../../lib/utils/Console.sol";
 import "../../lib/utils/VyperDeployer.sol";
-import "../IUniswapV2Pair.sol";
-import "./Console.sol";
-import "./VM.sol";
+import "./interfaces/IUniswapV2Pair.sol";
+import "./utils/Console.sol";
+import "./utils/VM.sol";
 
 import "../../node_modules/@rari-capital/solmate/src/tokens/ERC20.sol";
 
