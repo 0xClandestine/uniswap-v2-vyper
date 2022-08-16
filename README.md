@@ -1,14 +1,12 @@
 # Uniswap V2 Vyper
 An educational rewrite of Uniswap V2 in Vyper using Foundry.
 
-<br>
 
 ## Dependencies
 
 - [Foundry](https://github.com/gakonst/foundry)
 - [Vyper](https://vyper.readthedocs.io/en/stable/installing-vyper.html)
 
-<br>
 
 ## Acknowledgements
 
